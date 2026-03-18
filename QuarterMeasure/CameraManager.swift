@@ -59,23 +59,26 @@ class CameraManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleB
     }
 }
 
+class VideoPreviewView: UIView {
+    override class var layerClass: AnyClass {
+        AVCaptureVideoPreviewLayer.self
+    }
+    
+    var videoPreviewLayer: AVCaptureVideoPreviewLayer {
+        return layer as! AVCaptureVideoPreviewLayer
+    }
+}
+
 struct CameraPreviewView: UIViewRepresentable {
     @ObservedObject var cameraManager: CameraManager
     
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: UIScreen.main.bounds)
-        let preview = AVCaptureVideoPreviewLayer(session: cameraManager.session)
-        preview.frame = view.bounds
-        preview.videoGravity = .resizeAspectFill
-        
-        // Ensure preview layer resizes accurately
-        DispatchQueue.main.async {
-            preview.frame = view.bounds
-        }
-        
-        view.layer.addSublayer(preview)
+    func makeUIView(context: Context) -> VideoPreviewView {
+        let view = VideoPreviewView()
+        view.backgroundColor = .black
+        view.videoPreviewLayer.session = cameraManager.session
+        view.videoPreviewLayer.videoGravity = .resizeAspectFill
         return view
     }
     
-    func updateUIView(_ uiView: UIView, context: Context) { }
+    func updateUIView(_ uiView: VideoPreviewView, context: Context) { }
 }
