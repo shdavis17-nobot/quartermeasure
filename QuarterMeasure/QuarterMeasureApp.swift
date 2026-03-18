@@ -9,9 +9,12 @@ import SwiftUI
 
 @main
 struct QuarterMeasureApp: App {
+    @StateObject private var storeManager = StoreManager()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(storeManager)
         }
     }
 }
