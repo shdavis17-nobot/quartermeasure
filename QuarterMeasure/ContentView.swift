@@ -17,12 +17,12 @@ struct ContentView: View {
     @State private var isDragging   = false
     @State private var hasMeasurement = false
 
-    // User preferences
-    @State private var selectedRef: ReferenceObject = .quarter
+    // User prefs
+    @State private var selectedRef: ReferenceObject  = .quarter
     @State private var selectedUnit: MeasurementUnit = .imperial
 
     // UI
-    @State private var showSettings  = false
+    @State private var showSettings = false
     @State private var viewSize: CGSize = .zero
 
     // PhotosPicker
@@ -32,7 +32,7 @@ struct ContentView: View {
     @State private var detectionHapticTrigger = false
     @State private var pinHapticTrigger       = false
 
-    // MARK: - Computed
+    // MARK: Computed
     private var distancePts: CGFloat {
         let dx = endPoint.x - startPoint.x
         let dy = endPoint.y - startPoint.y
@@ -40,7 +40,6 @@ struct ContentView: View {
     }
 
     private var refPixelSize: CGFloat {
-        // Use the bounding box width (already in view points from converted Vision coords)
         guard visionDetector.quarterDetected else { return 0 }
         return visionDetector.quarterBoundingBox.width * viewSize.width
     }
@@ -58,33 +57,42 @@ struct ContentView: View {
         return MeasurementEngine.formatPoints(distancePts)
     }
 
-    // MARK: - Body
+    private var canCapture: Bool { !motionManager.isLocked }
+    private var canPin:     Bool { !motionManager.isLocked }
+
+    // MARK: Body
     var body: some View {
         NavigationStack {
             GeometryReader { geo in
                 ZStack {
-                    // ── Background ──────────────────────────────────────
-                    backgroundLayer
-                        .edgesIgnoringSafeArea(.all)
+                    // Background (live or frozen)
+                    backgroundLayer.edgesIgnoringSafeArea(.all)
 
-                    // ── Bounding box overlay ─────────────────────────────
+                    // Live viewfinder overlays
+                    if !cameraManager.isFrozen {
+                        // Bullseye reticle
+                        LevelReticleView(zone: motionManager.levelZone)
+
+                        // Zone badge
+                        zoneBadge
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .padding(.top, 16)
+                    }
+
+                    // Bounding box
                     if visionDetector.quarterDetected && !visionDetector.quarterBoundingBox.isEmpty {
                         boundingBoxOverlay(in: geo.size)
                     }
 
-                    // ── Measurement overlay (frozen mode) ────────────────
+                    // Measurement overlay (frozen only)
                     if cameraManager.isFrozen {
                         measurementOverlay(in: geo.size)
                     }
 
-                    // ── Bottom HUD ───────────────────────────────────────
+                    // Bottom HUD
                     VStack {
                         Spacer()
-                        if cameraManager.isFrozen {
-                            frozenBottomBar
-                        } else {
-                            liveBottomBar
-                        }
+                        if cameraManager.isFrozen { frozenBottomBar } else { liveBottomBar }
                     }
                 }
                 .onAppear { viewSize = geo.size }
@@ -98,7 +106,6 @@ struct ContentView: View {
                     .environmentObject(storeManager)
                     .environmentObject(appearanceManager)
             }
-            // PhotosPicker change
             .onChange(of: pickerItem) { _, item in
                 Task {
                     guard let item,
@@ -116,6 +123,8 @@ struct ContentView: View {
         // Haptics
         .sensoryFeedback(.success, trigger: detectionHapticTrigger)
         .sensoryFeedback(.impact(weight: .medium), trigger: pinHapticTrigger)
+        // Level-achieved tick haptic (from MotionManager)
+        .sensoryFeedback(.selection, trigger: motionManager.levelAchievedTick)
         .onChange(of: visionDetector.quarterDetected) { _, detected in
             if detected { detectionHapticTrigger.toggle() }
         }
@@ -128,23 +137,43 @@ struct ContentView: View {
             Image(uiImage: frozen)
                 .resizable()
                 .scaledToFill()
-                .onAppear {
-                    cameraManager.cvPixelBufferHandler = nil
-                }
+                .onAppear { cameraManager.cvPixelBufferHandler = nil }
         } else {
             CameraPreviewView(cameraManager: cameraManager)
                 .onAppear {
-                    cameraManager.cvPixelBufferHandler = { pixelBuffer in
-                        visionDetector.detectQuarter(in: pixelBuffer)
+                    cameraManager.cvPixelBufferHandler = { buf in
+                        visionDetector.detectQuarter(in: buf)
                     }
                 }
+        }
+    }
+
+    // MARK: - Zone Badge (live mode)
+    @ViewBuilder
+    private var zoneBadge: some View {
+        switch motionManager.levelZone {
+        case .green:
+            EmptyView()
+        case .warning:
+            HStack(spacing: 5) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.yellow)
+                Text("Tilt Detected").font(.caption.weight(.semibold))
+            }
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(.ultraThinMaterial, in: Capsule())
+        case .locked:
+            HStack(spacing: 5) {
+                Image(systemName: "lock.fill").foregroundColor(.red)
+                Text("Too Tilted — Level Phone").font(.caption.weight(.semibold))
+            }
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(.ultraThinMaterial, in: Capsule())
         }
     }
 
     // MARK: - Bounding Box
     private func boundingBoxOverlay(in size: CGSize) -> some View {
         let box = visionDetector.quarterBoundingBox
-        // Vision coords: origin bottom-left, normalized. Convert to SwiftUI top-left screen coords.
         let rect = CGRect(
             x:      box.minX * size.width,
             y:      (1 - box.maxY) * size.height,
@@ -160,8 +189,7 @@ struct ContentView: View {
             Text(selectedRef.rawValue)
                 .font(.caption2.bold())
                 .foregroundColor(.black)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
+                .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(Color.green, in: Capsule())
                 .offset(x: rect.minX, y: rect.minY - 22)
         }
@@ -176,6 +204,7 @@ struct ContentView: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
+                        guard canPin else { return }
                         if !isDragging {
                             startPoint = value.startLocation
                             isDragging = true
@@ -184,17 +213,13 @@ struct ContentView: View {
                         dragLocation = value.location
                     }
                     .onEnded { value in
-                        // Magnetic snap
+                        guard canPin else { return }
                         if let img = cameraManager.capturedImage {
-                            endPoint = EdgeDetector.snap(
-                                point: value.location,
-                                in: size,
-                                image: img
-                            )
+                            endPoint = EdgeDetector.snap(point: value.location, in: size, image: img)
                         } else {
                             endPoint = value.location
                         }
-                        isDragging    = false
+                        isDragging = false
                         hasMeasurement = true
                         pinHapticTrigger.toggle()
                     }
@@ -212,7 +237,13 @@ struct ContentView: View {
                         Circle().fill(Color.yellow).frame(width: 10, height: 10).position(startPoint)
 
                         if isDragging {
-                            MagnifierView(touchLocation: dragLocation, isVisible: true)
+                            // Real pixel-accurate loupe
+                            MagnifierView(
+                                touchLocation: dragLocation,
+                                isVisible: true,
+                                sourceImage: cameraManager.capturedImage,
+                                viewSize: size
+                            )
                         } else {
                             Circle().fill(Color.yellow).frame(width: 10, height: 10).position(endPoint)
                         }
@@ -231,40 +262,25 @@ struct ContentView: View {
                 }
             }
             .pickerStyle(.menu)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14).padding(.vertical, 8)
             .background(.ultraThinMaterial, in: Capsule())
 
             // Detection status
             HStack(spacing: 6) {
-                Circle()
-                    .fill(visionDetector.quarterDetected ? Color.green : Color.red)
+                Circle().fill(visionDetector.quarterDetected ? Color.green : Color.red)
                     .frame(width: 10, height: 10)
                 Text(visionDetector.quarterDetected
                      ? "\(selectedRef.rawValue) Detected"
                      : "Align \(selectedRef.rawValue) in Frame")
-                    .font(.subheadline)
+                .font(.subheadline)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14).padding(.vertical, 8)
             .background(.ultraThinMaterial, in: Capsule())
 
-            // Level status
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(motionManager.isLevel ? Color.green : Color.orange)
-                    .frame(width: 10, height: 10)
-                Text(motionManager.isLevel ? "Level ✓" : "Tilt phone until level")
-                    .font(.subheadline)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: Capsule())
-
-            // Shutter
+            // Shutter — disabled when locked
             Button {
-                cameraManager.capturePhoto { image in
-                    if let img = image { visionDetector.detectQuarter(in: img) }
+                cameraManager.capturePhoto { img in
+                    if let img { visionDetector.detectQuarter(in: img) }
                 }
             } label: {
                 ZStack {
@@ -272,7 +288,7 @@ struct ContentView: View {
                     Circle().fill(shutterFill).frame(width: 60, height: 60)
                 }
             }
-            .disabled(!motionManager.isLevel)
+            .disabled(motionManager.isLocked)
         }
         .padding(.bottom, 40)
     }
@@ -283,20 +299,14 @@ struct ContentView: View {
             if hasMeasurement {
                 if storeManager.isProUnlocked {
                     HStack(spacing: 14) {
-                        // Unit toggle
                         Picker("Unit", selection: $selectedUnit) {
-                            ForEach(MeasurementUnit.allCases) { u in
-                                Text(u.rawValue).tag(u)
-                            }
+                            ForEach(MeasurementUnit.allCases) { u in Text(u.rawValue).tag(u) }
                         }
-                        .pickerStyle(.segmented)
-                        .frame(width: 100)
+                        .pickerStyle(.segmented).frame(width: 100)
 
-                        // Live label
                         Text(measurementLabel)
                             .font(.title2.monospacedDigit().bold())
 
-                        // Annotated export
                         if let img = cameraManager.capturedImage {
                             let annotated = ExportRenderer.render(
                                 source: img,
@@ -313,25 +323,20 @@ struct ContentView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 20).padding(.vertical, 12)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                 } else {
-                    Button {
-                        showSettings = true
-                    } label: {
+                    Button { showSettings = true } label: {
                         Label("Unlock Pro to see measurement", systemImage: "lock.fill")
                             .font(.subheadline)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, 20).padding(.vertical, 12)
                             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                     }
                 }
             } else {
                 Text("Drag to measure")
                     .font(.subheadline)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 20).padding(.vertical, 12)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
             }
         }
@@ -341,44 +346,35 @@ struct ContentView: View {
     // MARK: - Toolbar
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        // Retake (frozen)
         if cameraManager.isFrozen {
             ToolbarItem(placement: .cancellationAction) {
                 Button {
                     cameraManager.retake()
                     resetMeasurement()
-                } label: {
-                    Label("Retake", systemImage: "arrow.counterclockwise")
-                }
+                } label: { Label("Retake", systemImage: "arrow.counterclockwise") }
             }
         }
-
-        // Photo library picker
         ToolbarItem(placement: .topBarLeading) {
             PhotosPicker(selection: $pickerItem, matching: .images) {
                 Image(systemName: "photo.on.rectangle")
             }
         }
-
-        // Settings
         ToolbarItem(placement: .primaryAction) {
-            Button { showSettings = true } label: {
-                Image(systemName: "gearshape")
-            }
+            Button { showSettings = true } label: { Image(systemName: "gearshape") }
         }
     }
 
     // MARK: - Helpers
     private var shutterFill: Color {
-        guard motionManager.isLevel else { return .gray }
-        return visionDetector.quarterDetected ? .green : .white
+        switch motionManager.levelZone {
+        case .locked:  return .gray
+        case .warning: return .yellow
+        case .green:   return visionDetector.quarterDetected ? .green : .white
+        }
     }
 
     private func resetMeasurement() {
-        isDragging     = false
-        hasMeasurement = false
-        startPoint     = .zero
-        endPoint       = .zero
-        dragLocation   = .zero
+        isDragging = false; hasMeasurement = false
+        startPoint = .zero; endPoint = .zero; dragLocation = .zero
     }
 }
