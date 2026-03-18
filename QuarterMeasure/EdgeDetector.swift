@@ -51,7 +51,7 @@ struct EdgeDetector {
         let handler = VNImageRequestHandler(cgImage: cropped, options: [:])
         try? handler.perform([request])
 
-        if let result = (request.results as? [VNContoursObservation])?.first {
+        if let result = request.results?.first {
             var minDist = CGFloat.infinity
             for i in 0..<min(result.contourCount, 10) {
                 guard let contour = try? result.contour(at: i) else { continue }

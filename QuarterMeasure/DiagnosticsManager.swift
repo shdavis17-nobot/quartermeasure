@@ -16,15 +16,17 @@ class DiagnosticsManager: NSObject, MXMetricManagerSubscriber {
     }
 
     // MARK: - MXMetricManagerSubscriber
+    // nonisolated required: MXMetricManagerSubscriber callbacks are dispatched on a
+    // background queue; marking nonisolated avoids the Swift 6 main-actor warning.
 
-    func didReceive(_ payloads: [MXMetricPayload]) {
+    nonisolated func didReceive(_ payloads: [MXMetricPayload]) {
         for payload in payloads {
-            // Log locally for debugging — never transmitted externally
+            // Log locally only — never transmitted externally
             print("[MetricKit] Received metric payload: \(payload.timeStampBegin) – \(payload.timeStampEnd)")
         }
     }
 
-    func didReceive(_ payloads: [MXDiagnosticPayload]) {
+    nonisolated func didReceive(_ payloads: [MXDiagnosticPayload]) {
         for payload in payloads {
             print("[MetricKit] Received diagnostic payload: \(payload.timeStampBegin) – \(payload.timeStampEnd)")
         }
