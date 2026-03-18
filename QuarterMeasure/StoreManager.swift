@@ -45,6 +45,15 @@ class StoreManager: ObservableObject {
             break
         }
     }
+
+    func restore() async {
+        do {
+            try await AppStore.sync()
+            await updateCustomerProductStatus()
+        } catch {
+            print("Restore failed: \(error)")
+        }
+    }
     
     private func listenForTransactions() -> Task<Void, Never> {
         return Task.detached {

@@ -2,214 +2,258 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var storeManager: StoreManager
+    @EnvironmentObject var appearanceManager: AppearanceManager
+
     @StateObject private var cameraManager = CameraManager()
     @StateObject private var visionDetector = VisionDetector()
     @StateObject private var motionManager = MotionManager()
 
     // Measurement state
-    @State private var dragLocation: CGPoint = .zero
-    @State private var isDragging: Bool = false
     @State private var startPoint: CGPoint = .zero
     @State private var endPoint: CGPoint = .zero
-    @State private var hasMeasurement: Bool = false
+    @State private var dragLocation: CGPoint = .zero
+    @State private var isDragging = false
+    @State private var hasMeasurement = false
 
-    // Computed distance in display points
+    // UI state
+    @State private var showSettings = false
+
+    // Haptic triggers
+    @State private var detectionHapticTrigger = false
+    @State private var pinHapticTrigger = false
+
     private var distancePts: CGFloat {
         let dx = endPoint.x - startPoint.x
         let dy = endPoint.y - startPoint.y
-        return sqrt(dx*dx + dy*dy)
+        return sqrt(dx * dx + dy * dy)
     }
 
     var body: some View {
-        ZStack {
-            // MARK: Background — live feed or frozen photo
-            if let frozen = cameraManager.capturedImage {
-                Image(uiImage: frozen)
-                    .resizable()
-                    .scaledToFill()
-                    .edgesIgnoringSafeArea(.all)
-            } else {
-                CameraPreviewView(cameraManager: cameraManager)
-                    .edgesIgnoringSafeArea(.all)
-                    .onAppear {
-                        cameraManager.cvPixelBufferHandler = { pixelBuffer in
-                            visionDetector.detectQuarter(in: pixelBuffer)
-                        }
-                    }
-            }
-
-            // MARK: Top Bar
-            VStack {
-                HStack {
-                    // Pro unlock button
-                    if !storeManager.isProUnlocked {
-                        Button {
-                            Task {
-                                if let product = storeManager.products.first {
-                                    try? await storeManager.purchase(product)
-                                }
+        NavigationStack {
+            ZStack {
+                // MARK: Background
+                if let frozen = cameraManager.capturedImage {
+                    Image(uiImage: frozen)
+                        .resizable()
+                        .scaledToFill()
+                        .edgesIgnoringSafeArea(.all)
+                } else {
+                    CameraPreviewView(cameraManager: cameraManager)
+                        .edgesIgnoringSafeArea(.all)
+                        .onAppear {
+                            cameraManager.cvPixelBufferHandler = { pixelBuffer in
+                                visionDetector.detectQuarter(in: pixelBuffer)
                             }
-                        } label: {
-                            Label("Unlock Pro – $0.99", systemImage: "lock.fill")
-                                .font(.subheadline.weight(.semibold))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(.blue.opacity(0.85), in: Capsule())
-                                .foregroundColor(.white)
                         }
-                    } else {
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundColor(.yellow)
-                            .font(.title2)
-                    }
+                }
+
+                // MARK: UI Overlays
+                VStack {
                     Spacer()
 
-                    // Retake button (only in frozen mode)
                     if cameraManager.isFrozen {
+                        frozenBottomBar
+                    } else {
+                        liveBottomBar
+                    }
+                }
+
+                // MARK: Measurement overlay (frozen mode)
+                if cameraManager.isFrozen {
+                    measurementOverlay
+                }
+            }
+            .navigationTitle("QuarterMeasure")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                // Retake (frozen mode)
+                if cameraManager.isFrozen {
+                    ToolbarItem(placement: .cancellationAction) {
                         Button {
                             cameraManager.retake()
                             resetMeasurement()
                         } label: {
                             Label("Retake", systemImage: "arrow.counterclockwise")
-                                .font(.subheadline.weight(.semibold))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(.black.opacity(0.55), in: Capsule())
-                                .foregroundColor(.white)
                         }
                     }
                 }
-                .padding(.top, 54)
-                .padding(.horizontal, 16)
+                // Settings gear
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                }
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+                    .environmentObject(storeManager)
+                    .environmentObject(appearanceManager)
+            }
+        }
+        // Haptics
+        .sensoryFeedback(.success, trigger: detectionHapticTrigger)
+        .sensoryFeedback(.impact(weight: .medium), trigger: pinHapticTrigger)
+        .onChange(of: visionDetector.quarterDetected) { _, detected in
+            if detected { detectionHapticTrigger.toggle() }
+        }
+    }
 
-                Spacer()
+    // MARK: - Live Bottom Bar
+    private var liveBottomBar: some View {
+        VStack(spacing: 12) {
+            // Detection status
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(visionDetector.quarterDetected ? Color.green : Color.red)
+                    .frame(width: 10, height: 10)
+                Text(visionDetector.quarterDetected ? "Quarter Detected" : "Align Quarter in Frame")
+                    .font(.subheadline)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial, in: Capsule())
 
-                // MARK: Bottom controls
-                if cameraManager.isFrozen {
-                    // Frozen photo — show measurement hint
-                    VStack(spacing: 6) {
-                        if hasMeasurement {
-                            Text(String(format: "%.0f pts (drag to adjust)", distancePts))
-                                .font(.headline)
-                                .foregroundColor(.yellow)
-                        } else {
-                            Text("Drag to measure")
-                                .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.85))
+            // Level indicator
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(motionManager.isLevel ? Color.green : Color.orange)
+                    .frame(width: 10, height: 10)
+                Text(motionManager.isLevel ? "Level ✓" : "Tilt phone until level")
+                    .font(.subheadline)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial, in: Capsule())
+
+            // Shutter button
+            Button {
+                cameraManager.capturePhoto { image in
+                    if let img = image {
+                        visionDetector.detectQuarter(in: img)
+                    }
+                }
+            } label: {
+                ZStack {
+                    Circle()
+                        .stroke(Color.primary.opacity(0.5), lineWidth: 3)
+                        .frame(width: 72, height: 72)
+                    Circle()
+                        .fill(shutterFill)
+                        .frame(width: 60, height: 60)
+                }
+            }
+            .disabled(!motionManager.isLevel)
+        }
+        .padding(.bottom, 40)
+    }
+
+    // MARK: - Frozen Bottom Bar
+    private var frozenBottomBar: some View {
+        VStack(spacing: 8) {
+            if hasMeasurement {
+                if storeManager.isProUnlocked {
+                    // Pro: show real label + export
+                    HStack(spacing: 12) {
+                        Text(String(format: "%.0f pt", distancePts))
+                            .font(.title2.monospacedDigit().bold())
+                        if let image = cameraManager.capturedImage,
+                           let data = image.jpegData(compressionQuality: 0.9) {
+                            ShareLink(
+                                item: data,
+                                preview: SharePreview(
+                                    "QuarterMeasure Photo",
+                                    image: Image(uiImage: image)
+                                )
+                            ) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.title2)
+                            }
                         }
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
-                    .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
-                    .padding(.bottom, 30)
-
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
                 } else {
-                    // Live view — detection status + level + shutter
-                    VStack(spacing: 12) {
-                        // Quarter detection pill
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(visionDetector.quarterDetected ? Color.green : Color.red)
-                                .frame(width: 10, height: 10)
-                            Text(visionDetector.quarterDetected ? "Quarter Detected" : "Align Quarter in Frame")
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.black.opacity(0.6), in: Capsule())
-
-                        // Level indicator
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(motionManager.isLevel ? Color.green : Color.orange)
-                                .frame(width: 10, height: 10)
-                            Text(motionManager.isLevel ? "Level ✓" : "Tilt phone until level")
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.black.opacity(0.6), in: Capsule())
-
-                        // Shutter button — only enabled when level and quarter detected
-                        Button {
-                            cameraManager.capturePhoto { image in
-                                if let img = image {
-                                    visionDetector.detectQuarter(in: img)
-                                }
-                            }
-                        } label: {
-                            ZStack {
-                                Circle()
-                                    .stroke(.white, lineWidth: 3)
-                                    .frame(width: 70, height: 70)
-                                Circle()
-                                    .fill(shutterColor)
-                                    .frame(width: 58, height: 58)
-                            }
-                        }
-                        .disabled(!motionManager.isLevel)
-                        .padding(.bottom, 30)
+                    // Free: blur / gate the label
+                    HStack(spacing: 8) {
+                        Image(systemName: "lock.fill")
+                        Text("Unlock Pro to see measurement")
+                            .font(.subheadline)
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
                 }
-            }
-
-            // MARK: Measurement overlay (frozen mode only)
-            if cameraManager.isFrozen {
-                // Invisible drag layer
-                Color.white.opacity(0.001)
-                    .edgesIgnoringSafeArea(.all)
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                if !isDragging {
-                                    startPoint = value.startLocation
-                                    isDragging = true
-                                    hasMeasurement = false
-                                }
-                                dragLocation = value.location
-                            }
-                            .onEnded { value in
-                                endPoint = value.location
-                                isDragging = false
-                                hasMeasurement = true
-                            }
-                    )
-
-                // Measurement line
-                if isDragging || hasMeasurement {
-                    let lineEnd = isDragging ? dragLocation : endPoint
-                    Path { path in
-                        path.move(to: startPoint)
-                        path.addLine(to: lineEnd)
-                    }
-                    .stroke(Color.yellow, style: StrokeStyle(lineWidth: 2, dash: [6]))
-
-                    // Start pin
-                    Circle()
-                        .fill(Color.yellow)
-                        .frame(width: 10, height: 10)
-                        .position(startPoint)
-
-                    // End pin / magnifier while dragging
-                    if isDragging {
-                        MagnifierView(touchLocation: dragLocation, isVisible: true)
-                    } else {
-                        Circle()
-                            .fill(Color.yellow)
-                            .frame(width: 10, height: 10)
-                            .position(endPoint)
-                    }
-                }
+            } else {
+                Text("Drag to measure")
+                    .font(.subheadline)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
         }
-        .preferredColorScheme(.dark)
+        .padding(.bottom, 40)
     }
 
-    // MARK: Helpers
-    private var shutterColor: Color {
-        if !motionManager.isLevel { return .gray }
+    // MARK: - Measurement Overlay
+    private var measurementOverlay: some View {
+        Color.white.opacity(0.001)
+            .edgesIgnoringSafeArea(.all)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if !isDragging {
+                            startPoint = value.startLocation
+                            isDragging = true
+                            hasMeasurement = false
+                        }
+                        dragLocation = value.location
+                    }
+                    .onEnded { value in
+                        endPoint = value.location
+                        isDragging = false
+                        hasMeasurement = true
+                        pinHapticTrigger.toggle()
+                    }
+            )
+            .overlay(
+                Group {
+                    if isDragging || hasMeasurement {
+                        let lineEnd = isDragging ? dragLocation : endPoint
+                        ZStack {
+                            // Measurement line
+                            Path { path in
+                                path.move(to: startPoint)
+                                path.addLine(to: lineEnd)
+                            }
+                            .stroke(Color.yellow, style: StrokeStyle(lineWidth: 2, dash: [6]))
+
+                            // Start pin
+                            Circle()
+                                .fill(Color.yellow)
+                                .frame(width: 10, height: 10)
+                                .position(startPoint)
+
+                            // End — magnifier while dragging, pin when dropped
+                            if isDragging {
+                                MagnifierView(touchLocation: dragLocation, isVisible: true)
+                            } else {
+                                Circle()
+                                    .fill(Color.yellow)
+                                    .frame(width: 10, height: 10)
+                                    .position(endPoint)
+                            }
+                        }
+                    }
+                }
+            )
+    }
+
+    // MARK: - Helpers
+    private var shutterFill: Color {
+        guard motionManager.isLevel else { return .gray }
         return visionDetector.quarterDetected ? .green : .white
     }
 
