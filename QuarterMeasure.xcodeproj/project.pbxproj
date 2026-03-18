@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		29C55EE62F6B4A00009AD065 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 29C55EE52F6B4A00009AD065 /* PrivacyInfo.xcprivacy */; };
+		29C55EE82F6B4A00009AD065 /* QuarterMeasure.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 29C55EE72F6B4A00009AD065 /* QuarterMeasure.storekit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		29C55EC92F6B49B6009AD065 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +32,8 @@
 		29C55EBB2F6B49B5009AD065 /* QuarterMeasure.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QuarterMeasure.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		29C55EC82F6B49B6009AD065 /* QuarterMeasureTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = QuarterMeasureTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		29C55ED22F6B49B6009AD065 /* QuarterMeasureUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = QuarterMeasureUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		29C55EE52F6B4A00009AD065 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		29C55EE72F6B4A00009AD065 /* QuarterMeasure.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = QuarterMeasure.storekit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -79,6 +86,8 @@
 				29C55ECB2F6B49B6009AD065 /* QuarterMeasureTests */,
 				29C55ED52F6B49B6009AD065 /* QuarterMeasureUITests */,
 				29C55EBC2F6B49B5009AD065 /* Products */,
+				29C55EE52F6B4A00009AD065 /* PrivacyInfo.xcprivacy */,
+				29C55EE72F6B4A00009AD065 /* QuarterMeasure.storekit */,
 			);
 			sourceTree = "<group>";
 		};
@@ -212,6 +221,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				29C55EE62F6B4A00009AD065 /* PrivacyInfo.xcprivacy in Resources */,
+				29C55EE82F6B4A00009AD065 /* QuarterMeasure.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
