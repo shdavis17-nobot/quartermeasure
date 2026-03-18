@@ -131,6 +131,15 @@ struct ContentView: View {
         .onChange(of: visionDetector.quarterDetected) { _, detected in
             if detected { detectionHapticTrigger.toggle() }
         }
+        .task {
+            // Lazy-start all managers after UI is ready
+            storeManager.start()
+            cameraManager.start()
+            motionManager.start()
+        }
+        .onDisappear {
+            motionManager.stopDeviceMotion()
+        }
     }
 
     // MARK: - Background

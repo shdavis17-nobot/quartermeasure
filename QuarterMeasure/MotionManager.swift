@@ -28,9 +28,13 @@ class MotionManager: ObservableObject {
     private let greenThreshold:   Double = 2.0
     private let warningThreshold: Double = 5.0
 
-    init() { startDeviceMotion() }
+    init() { }
 
-    func startDeviceMotion() {
+    func start() {
+        startDeviceMotion()
+    }
+
+    private func startDeviceMotion() {
         guard motionManager.isDeviceMotionAvailable else { return }
 
         motionManager.deviceMotionUpdateInterval = 1.0 / 30.0  // 30 Hz for smoother reticle

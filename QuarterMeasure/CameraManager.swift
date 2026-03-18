@@ -21,10 +21,13 @@ class CameraManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleB
 
     override init() {
         super.init()
+    }
+
+    func start() {
         checkPermissions()
     }
 
-    func checkPermissions() {
+    private func checkPermissions() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             setupCamera()

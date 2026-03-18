@@ -11,7 +11,9 @@ class StoreManager: ObservableObject {
     private let productID = "com.quartermeasure.prounlock"
     private var updatesTask: Task<Void, Never>? = nil
     
-    init() {
+    init() { }
+
+    func start() {
         updatesTask = listenForTransactions()
         Task {
             await fetchProducts()
