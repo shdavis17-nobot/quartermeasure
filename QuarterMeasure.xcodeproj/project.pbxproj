@@ -36,9 +36,22 @@
 		29C55EE72F6B4A00009AD065 /* QuarterMeasure.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = QuarterMeasure.storekit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		29C55EF62F6B4EEB009AD065 /* Exceptions for "QuarterMeasure" folder in "QuarterMeasure" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 29C55EBA2F6B49B5009AD065 /* QuarterMeasure */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		29C55EBD2F6B49B5009AD065 /* QuarterMeasure */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				29C55EF62F6B4EEB009AD065 /* Exceptions for "QuarterMeasure" folder in "QuarterMeasure" target */,
+			);
 			path = QuarterMeasure;
 			sourceTree = "<group>";
 		};
@@ -411,6 +424,11 @@
 				DEVELOPMENT_TEAM = KCNKF4CG5B;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = QuarterMeasure/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Quarter Measure";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSCameraUsageDescription = "QuarterMeasure uses the camera to measure objects using a quarter as reference.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "QuarterMeasure uses motion sensors to ensure the camera is level for accurate measurements.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -443,6 +461,11 @@
 				DEVELOPMENT_TEAM = KCNKF4CG5B;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = QuarterMeasure/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Quarter Measure";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSCameraUsageDescription = "QuarterMeasure uses the camera to measure objects using a quarter as reference.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "QuarterMeasure uses motion sensors to ensure the camera is level for accurate measurements.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
