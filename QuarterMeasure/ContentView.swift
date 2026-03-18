@@ -110,7 +110,7 @@ struct ContentView: View {
                 }
                 .stroke(Color.yellow, style: StrokeStyle(lineWidth: 2, dash: [5]))
                 
-                LoupeView(touchLocation: dragLocation)
+                MagnifierView(touchLocation: dragLocation, isVisible: isDragging)
                 
                 Text(String(format: "%.1f pts", distanceMeasure))
                     .font(.caption)
