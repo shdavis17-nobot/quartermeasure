@@ -62,10 +62,13 @@ struct MagnifierView: View {
 
     // MARK: - Pixel-accurate magnified crop
     private func magnifiedContent(_ image: UIImage) -> some View {
-        let imgW = image.size.width
-        let imgH = image.size.height
+        // UIImage.size is in POINTS; CGImage.cropping(to:) works in PIXELS.
+        // Always derive dimensions from CGImage to avoid scale-factor mismatch on Retina.
+        guard let cgSrc = image.cgImage else { return AnyView(Color.clear) }
+        let imgW = CGFloat(cgSrc.width)
+        let imgH = CGFloat(cgSrc.height)
 
-        // Scale view coords → image pixel coords
+        // Scale view coords → image pixel coords (points × (pixels/points) = pixels)
         let scaleX = imgW / viewSize.width
         let scaleY = imgH / viewSize.height
 
@@ -84,8 +87,8 @@ struct MagnifierView: View {
             height: min(imgCaptureH, imgH - max(0, imgY))
         )
 
-        // Crop the image
-        if let cgCrop = image.cgImage?.cropping(to: cropRect) {
+        // Crop the image (CGImage pixel space — matches cropRect correctly now)
+        if let cgCrop = cgSrc.cropping(to: cropRect) {
             let cropped = UIImage(cgImage: cgCrop,
                                   scale: image.scale,
                                   orientation: image.imageOrientation)

@@ -32,6 +32,9 @@ struct ContentView: View {
     @State private var detectionHapticTrigger = false
     @State private var pinHapticTrigger       = false
 
+    // Cached annotated export — recomputed only when measurement changes, not on every redraw
+    @State private var cachedAnnotatedImage: UIImage? = nil
+
     // MARK: Computed
     private var distancePts: CGFloat {
         let dx = endPoint.x - startPoint.x
@@ -214,14 +217,30 @@ struct ContentView: View {
                     }
                     .onEnded { value in
                         guard canPin else { return }
-                        if let img = cameraManager.capturedImage {
-                            endPoint = EdgeDetector.snap(point: value.location, in: size, image: img)
-                        } else {
-                            endPoint = value.location
+                        
+                        let processSnap: (CGPoint) -> Void = { snappedPoint in
+                            endPoint = snappedPoint
+                            isDragging = false
+                            hasMeasurement = true
+                            pinHapticTrigger.toggle()
+                            
+                            // Regenerate the annotated image now (once, on pin drop, not every body call)
+                            if let img = cameraManager.capturedImage {
+                                cachedAnnotatedImage = ExportRenderer.render(
+                                    source: img,
+                                    startPoint: startPoint,
+                                    endPoint: endPoint,
+                                    viewSize: size,
+                                    label: measurementLabel
+                                )
+                            }
                         }
-                        isDragging = false
-                        hasMeasurement = true
-                        pinHapticTrigger.toggle()
+
+                        if let img = cameraManager.capturedImage {
+                            EdgeDetector.snap(point: value.location, in: size, image: img, completion: processSnap)
+                        } else {
+                            processSnap(value.location)
+                        }
                     }
             )
             .overlay {
@@ -307,14 +326,7 @@ struct ContentView: View {
                         Text(measurementLabel)
                             .font(.title2.monospacedDigit().bold())
 
-                        if let img = cameraManager.capturedImage {
-                            let annotated = ExportRenderer.render(
-                                source: img,
-                                startPoint: startPoint,
-                                endPoint: endPoint,
-                                viewSize: viewSize,
-                                label: measurementLabel
-                            )
+                        if let annotated = cachedAnnotatedImage {
                             ShareLink(
                                 item: Image(uiImage: annotated),
                                 preview: SharePreview("QuarterMeasure", image: Image(uiImage: annotated))

@@ -70,17 +70,20 @@ class StoreManager: ObservableObject {
     }
     
     private func updateCustomerProductStatus() async {
+        // Reset before re-checking — handles refunds/revocations correctly
+        var foundPro = false
         for await result in Transaction.currentEntitlements {
             do {
                 let transaction = try checkVerified(result)
                 if transaction.productID == productID {
                     purchasedProductIDs.insert(transaction.productID)
-                    isProUnlocked = true
+                    foundPro = true
                 }
             } catch {
                 print("Failed to verify entitlement: \(error)")
             }
         }
+        isProUnlocked = foundPro
     }
     
     nonisolated private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {

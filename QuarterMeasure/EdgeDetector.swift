@@ -4,72 +4,75 @@ import UIKit
 import CoreGraphics
 
 /// Finds the nearest high-contrast edge within a radius of a touch point.
-/// Uses VNDetectEdgesRequest on a cropped region of the frozen image.
+/// Vision work runs on a background queue to never block the main thread.
 struct EdgeDetector {
 
-    /// Attempts to snap `point` to a nearby edge in `image`.
-    /// - Parameters:
-    ///   - point: Touch location in view coordinates.
-    ///   - viewSize: Size of the view displaying the image.
-    ///   - image: The frozen captured UIImage.
-    ///   - radius: Search radius in view points (default 40).
-    /// - Returns: Snapped point (or original if no edge found).
+    /// Async snap — calls completion on the main queue with the snapped point.
     static func snap(
         point: CGPoint,
         in viewSize: CGSize,
         image: UIImage,
-        radius: CGFloat = 40
+        radius: CGFloat = 40,
+        completion: @escaping (CGPoint) -> Void
+    ) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let snapped = snapSync(point: point, in: viewSize, image: image, radius: radius)
+            DispatchQueue.main.async { completion(snapped) }
+        }
+    }
+
+    // Synchronous implementation — MUST be called on a background queue only
+    private static func snapSync(
+        point: CGPoint,
+        in viewSize: CGSize,
+        image: UIImage,
+        radius: CGFloat
     ) -> CGPoint {
         guard let cgImage = image.cgImage else { return point }
 
+        // Use CGImage pixel dimensions (not UIImage.size which is in points)
         let imgW = CGFloat(cgImage.width)
         let imgH = CGFloat(cgImage.height)
 
-        // Scale from view space to image space
         let scaleX = imgW / viewSize.width
         let scaleY = imgH / viewSize.height
 
-        let imgPoint = CGPoint(x: point.x * scaleX, y: point.y * scaleY)
+        let imgPoint  = CGPoint(x: point.x * scaleX, y: point.y * scaleY)
         let imgRadius = radius * max(scaleX, scaleY)
 
-        // Crop region around touch
         let cropRect = CGRect(
             x: max(0, imgPoint.x - imgRadius),
             y: max(0, imgPoint.y - imgRadius),
-            width: min(imgRadius * 2, imgW - max(0, imgPoint.x - imgRadius)),
+            width:  min(imgRadius * 2, imgW - max(0, imgPoint.x - imgRadius)),
             height: min(imgRadius * 2, imgH - max(0, imgPoint.y - imgRadius))
         )
 
         guard let cropped = cgImage.cropping(to: cropRect) else { return point }
 
-        // Run edge detection on the crop
-        var bestEdge: CGPoint? = nil
         let request = VNDetectContoursRequest()
-        request.detectsDarkOnLight = true
+        request.detectsDarkOnLight    = true
         request.maximumImageDimension = 256
 
         let handler = VNImageRequestHandler(cgImage: cropped, options: [:])
         try? handler.perform([request])
 
+        var bestEdge: CGPoint? = nil
         if let result = request.results?.first {
             var minDist = CGFloat.infinity
             for i in 0..<min(result.contourCount, 10) {
                 guard let contour = try? result.contour(at: i) else { continue }
                 let bb = contour.normalizedPath.boundingBox
 
-                // Convert normalized contour center back to crop image space
-                let centerX = (bb.midX * CGFloat(cropped.width)) + cropRect.minX
+                let centerX = (bb.midX * CGFloat(cropped.width))  + cropRect.minX
                 let centerY = ((1 - bb.midY) * CGFloat(cropped.height)) + cropRect.minY
 
-                // Convert to view space
                 let vx = centerX / scaleX
                 let vy = centerY / scaleY
-
                 let dx = vx - point.x
                 let dy = vy - point.y
-                let dist = sqrt(dx*dx + dy*dy)
+                let dist = sqrt(dx * dx + dy * dy)
                 if dist < minDist && dist < radius {
-                    minDist = dist
+                    minDist  = dist
                     bestEdge = CGPoint(x: vx, y: vy)
                 }
             }

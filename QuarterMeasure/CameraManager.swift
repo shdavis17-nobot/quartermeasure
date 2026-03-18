@@ -7,7 +7,11 @@ import UIKit
 class CameraManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     @Published var session = AVCaptureSession()
     @Published var capturedImage: UIImage? = nil
-    @Published var isFrozen: Bool = false
+    @Published var isFrozen: Bool = false {
+        didSet { _isFrozenAtomic = isFrozen }
+    }
+    // Safe to read from videoQueue — mirrors isFrozen without @Published main-thread requirement
+    private var _isFrozenAtomic: Bool = false
 
     private let output = AVCaptureVideoDataOutput()
     private let photoOutput = AVCapturePhotoOutput()
@@ -68,7 +72,8 @@ class CameraManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleB
 
     // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard !isFrozen, let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        // Use _isFrozenAtomic — reading @Published isFrozen from a background queue is a data race
+        guard !_isFrozenAtomic, let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         cvPixelBufferHandler?(pixelBuffer)
     }
 }
