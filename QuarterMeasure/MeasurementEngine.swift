@@ -53,10 +53,17 @@ struct MeasurementEngine {
         pixelDistance: CGFloat,
         refPixelSize: CGFloat,
         reference: ReferenceObject,
-        unit: MeasurementUnit
+        unit: MeasurementUnit,
+        pitch: Double = 0.0,
+        roll: Double = 0.0
     ) -> String {
         guard refPixelSize > 0 else { return "—" }
-        let inches = (pixelDistance / refPixelSize) * reference.realWorldInches
+        
+        // 35B ARCHITECT: Simplified to Pure Ratio.
+        // Reason: Coplanar objects (sitting on the same table) scale equally with tilt.
+        // The ratio of (measured_pixels / reference_pixels) is inherently tilt-invariant.
+        let inches = (pixelDistance / refPixelSize) * CGFloat(reference.realWorldInches)
+        
         switch unit {
         case .imperial:
             return String(format: "%.2f in", inches)
