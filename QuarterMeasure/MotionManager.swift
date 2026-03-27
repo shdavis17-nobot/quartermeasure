@@ -4,9 +4,9 @@ import CoreMotion
 
 // MARK: - Level Zone
 enum LevelZone: Equatable {
-    case green    // ±2.0° — safe to capture
-    case warning  // 2.0°–5.0° — caution
-    case locked   // >5.0° — capture / pin disabled
+    case green    // ±12.0° — Handheld friendly
+    case warning  // 12.0°–24.0° — Caution
+    case locked   // >24.0° — Critical tilt
 }
 
 // MARK: - Motion Manager
@@ -24,9 +24,12 @@ class MotionManager: ObservableObject {
     var isLevel:  Bool { levelZone == .green }
     var isLocked: Bool { levelZone == .locked }
 
-    // Thresholds (degrees)
-    private let greenThreshold:   Double = 2.0
-    private let warningThreshold: Double = 5.0
+    // Very aggressive low-pass filter alpha for 'Zen' steadiness
+    private let filterAlpha: Double = 0.08
+
+    private let greenThreshold:   Double = 12.0
+    private let warningThreshold: Double = 24.0
+    private let hysteresis:       Double = 4.0
 
     init() { }
 
@@ -35,28 +38,53 @@ class MotionManager: ObservableObject {
     }
 
     private func startDeviceMotion() {
-        guard motionManager.isDeviceMotionAvailable else { return }
+        guard motionManager.isDeviceMotionAvailable else { 
+            print("[MotionManager] Device motion unavailable")
+            return 
+        }
 
-        motionManager.deviceMotionUpdateInterval = 1.0 / 30.0  // 30 Hz for smoother reticle
+        print("[MotionManager] Starting filtered gravity updates...")
+        motionManager.deviceMotionUpdateInterval = 1.0 / 30.0
         motionManager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
             guard let self, let motion else { return }
 
-            let p = motion.attitude.pitch * 180 / .pi
-            let r = motion.attitude.roll  * 180 / .pi
+            // Math Fix: Calculate tilt relative to the Z-axis (screen normal).
+            // When flat on a table, grav.z is -1.0. We want that to be 0 degrees of tilt.
+            let grav = motion.gravity
+            
+            // atan2(component, abs(z)) gives the angle in degrees from 'vertical'
+            // We use -grav.y because +Y is toward the top of the phone
+            let rawPitch = atan2(-grav.y, abs(grav.z)) * 180 / .pi
+            let rawRoll  = atan2(grav.x,  abs(grav.z)) * 180 / .pi
 
-            self.pitch = p
-            self.roll  = r
+            // Simple Low-Pass Filter to eliminate jitter
+            self.pitch = (self.filterAlpha * rawPitch) + ((1.0 - self.filterAlpha) * self.pitch)
+            self.roll  = (self.filterAlpha * rawRoll)  + ((1.0 - self.filterAlpha) * self.roll)
 
-            let maxTilt = max(abs(p), abs(r))
+            // Total tilt magnitude from absolute level
+            let totalTilt = acos(max(-1.0, min(1.0, -grav.z))) * 180 / .pi
+            let maxTilt = totalTilt // More accurate for a bullseye reticle than max(p, r)
+
             let previousZone = self.levelZone
+            var newZone = previousZone
 
-            let newZone: LevelZone
-            if maxTilt <= self.greenThreshold {
-                newZone = .green
-            } else if maxTilt <= self.warningThreshold {
-                newZone = .warning
-            } else {
-                newZone = .locked
+            switch previousZone {
+            case .green:
+                if maxTilt > (self.greenThreshold + self.hysteresis) {
+                    newZone = (maxTilt > self.warningThreshold) ? .locked : .warning
+                }
+            case .warning:
+                if maxTilt <= self.greenThreshold {
+                    newZone = .green
+                } else if maxTilt > (self.warningThreshold + self.hysteresis) {
+                    newZone = .locked
+                }
+            case .locked:
+                if maxTilt <= self.greenThreshold {
+                    newZone = .green
+                } else if maxTilt <= self.warningThreshold {
+                    newZone = .warning
+                }
             }
 
             self.levelZone = newZone

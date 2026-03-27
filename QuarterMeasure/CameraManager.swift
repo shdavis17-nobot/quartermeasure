@@ -70,7 +70,7 @@ class CameraManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleB
         }
         
         do {
-            let input = try AVCaptureDeviceInput(device: captureDevice)
+            let input = try AVCaptureDeviceInput(device: device)
             session.beginConfiguration()
             session.sessionPreset = .photo
             if session.canAddInput(input) { session.addInput(input) }

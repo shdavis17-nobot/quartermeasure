@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict/>
+<dict>
+	<key>NSCameraUsageDescription</key>
+	<string>QuarterMeasure needs camera access to detect items and provide real-world dimensions.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>QuarterMeasure needs motion access to compensate for device tilt and improve measurement accuracy.</string>
+</dict>
 </plist>
